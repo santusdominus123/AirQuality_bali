@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="EcoMonitor AQ - Dashboard pemantauan kualitas udara Bali">
+  <title>EcoMonitor AQ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <button class="menu-toggle icon-button" id="menuToggle" aria-label="Buka menu">
+        <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <a class="brand" href="#dashboard" aria-label="EcoMonitor AQ">
+        <span class="brand-mark">
+          <svg viewBox="0 0 24 24"><path d="M12 3v18M8.5 7.5C6 7 4.2 8.7 4 11c2.5.4 4.4-.1 5.5-2.1M15.5 12.5c2.5-.5 4.3 1.2 4.5 3.5-2.5.4-4.4-.1-5.5-2.1"/></svg>
+        </span>
+        <span>EcoMonitor <b>AQ</b></span>
+      </a>
+      <div class="topbar-date">
+        <span class="live-dot"></span>
+        <span id="currentDate">05 Desember 2025, 18.00</span>
+      </div>
+      <button class="icon-button notification" aria-label="Notifikasi">
+        <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>
+        <span></span>
+      </button>
+    </header>
+
+    <aside class="sidebar" id="sidebar">
+      <nav aria-label="Navigasi utama">
+        <button class="nav-item active" data-page="dashboard">
+          <span data-icon="grid"></span><span>Dashboard</span>
+        </button>
+        <button class="nav-item" data-page="pollutants">
+          <span data-icon="flask"></span><span>Info Polutan</span>
+        </button>
+        <button class="nav-item" data-page="history">
+          <span data-icon="history"></span><span>Data Histori</span>
+        </button>
+        <button class="nav-item" data-page="accuracy">
+          <span data-icon="chart"></span><span>Akurasi Model</span>
+        </button>
+      </nav>
+      <div class="sidebar-foot">
+        <div class="mini-status"><span></span> Sistem normal</div>
+        <p>v1.0.0</p>
+      </div>
+    </aside>
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+    <main class="content">
+      <section class="page active" id="page-dashboard">
+        <div class="page-heading">
+          <div><p class="eyebrow">Ringkasan hari ini</p><h1>Dashboard Kualitas Udara</h1></div>
+        </div>
+
+        <div class="metrics-grid">
+          <article class="metric-card">
+            <div class="metric-head"><span id="metricLocation">Denpasar</span><small>Rata - Rata AQI</small></div>
+            <strong id="aqiValue">81</strong>
+            <div class="meter"><i id="aqiMeter" style="width:54%; background:#f4b740"></i></div>
+            <small id="aqiUpdate">Terakhir diperbarui 2 menit lalu</small>
+          </article>
+          <article class="metric-card status-card">
+            <div class="metric-head"><strong id="statusValue" class="status-head">Sedang</strong><small>Index AQI</small></div>
+            <p id="statusDesc">Udara bersih dan ideal untuk segala aktivitas luar ruangan.</p>
+          </article>
+          <article class="metric-card">
+            <div class="metric-head"><span></span><small>Max PM2.5</small></div>
+            <strong id="pm25Value">105</strong>
+            <div class="meter"><i id="pm25Meter" style="width:70%; background:#f4b740"></i></div>
+          </article>
+          <article class="metric-card">
+            <div class="metric-head"><span></span><small>Min PM2.5</small></div>
+            <strong id="pm25MinValue">115</strong>
+            <div class="meter"><i id="pm25MinMeter" style="width:76%; background:#f4b740"></i></div>
+          </article>
+        </div>
+
+        <div class="dashboard-main-grid">
+          <div class="stack">
+            <article class="card text-card">
+              <div class="card-title"><h2>Cuaca</h2><span class="weather-icon" id="weatherTemp">28°</span></div>
+              <p id="weatherText">Cuaca sedang lembap dan tidak hujan. Angin ada, tapi tidak terlalu kuat. Kondisi seperti ini kurang membantu membersihkan asap atau menyebarkan polutan, sehingga PM2.5/PM10 bisa lebih mudah bertahan di udara.</p>
+            </article>
+            <article class="card text-card">
+              <div class="card-title"><h2>Berita</h2><span data-icon="news"></span></div>
+              <p id="newsText">Berita lokal menunjukkan peningkatan kemacetan dan keluhan asap pembakaran sampah di beberapa wilayah.</p>
+              <div id="newsSources" class="news-sources"></div>
+            </article>
+          </div>
+          <article class="card map-card">
+            <div class="card-title">
+              <h2>Bali</h2>
+              <button class="text-button" id="fitMap"><span data-icon="expand"></span> Full Screen</button>
+            </div>
+            <div id="map" aria-label="Peta kualitas udara Bali"></div>
+            <div class="map-legend">
+              <span style="background:#00e400"></span> Baik
+              <span style="background:#ffff00"></span> Sedang
+              <span style="background:#ff7e00"></span> Tidak Sehat (Populasi Sensitif)
+              <span style="background:#ff0000"></span> Tidak Sehat
+              <span style="background:#8f3f97"></span> Sangat Tidak Sehat
+              <span style="background:#7e0023"></span> Berbahaya
+            </div>
+          </article>
+          <div class="stack">
+            <article class="card list-card">
+              <div class="card-title"><h2>Indikasi Faktor Penyebab</h2><span data-icon="alert"></span></div>
+              <ul id="causesList">
+                <li>Tidak ada hujan, sehingga polutan tidak terbawa turun.</li>
+                <li>Aktivitas kendaraan meningkat pada jam sibuk.</li>
+                <li>Terdapat indikasi asap dari pembakaran sampah lokal.</li>
+              </ul>
+            </article>
+            <article class="card list-card">
+              <div class="card-title"><h2>Rekomendasi</h2><span data-icon="spark"></span></div>
+              <ul id="recoList">
+                <li>Kurangi aktivitas luar ruangan saat kualitas udara memburuk.</li>
+                <li>Gunakan masker saat beraktivitas di luar ruangan.</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+
+        <article class="card chart-card wide-chart">
+          <div class="card-title">
+            <div><h2>Tren AQI</h2><small>24 Jam Terakhir · <b id="trendLocation">Denpasar</b></small></div>
+            <div class="legend"><span class="aqi"></span>AQI</div>
+          </div>
+          <div class="chart" data-chart="multi"></div>
+        </article>
+
+        <div class="prediction-grid">
+          <article class="card chart-card">
+            <div class="card-title">
+              <div><h2>Prediksi AQI</h2><small>24 Jam Kedepan</small></div>
+              <div class="legend"><span class="aqi"></span>AQI</div>
+            </div>
+            <div class="chart" data-chart="prediction"></div>
+          </article>
+          <article class="card risk-card">
+            <div class="card-title"><h2>Analisis Risiko</h2><span data-icon="shield"></span></div>
+            <p>Hasil prediksi menunjukkan kualitas udara berpotensi memburuk pada sore hingga malam hari. PM2.5 diperkirakan meningkat dengan beberapa fluktuasi pada beberapa jam tertentu.</p>
+            <div class="risk-score"><span>Risiko</span><strong>Sedang</strong></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="page" id="page-pollutants">
+        <div class="page-heading">
+          <div><p class="eyebrow">Pemantauan kualitas udara</p><h1>Info Polutan</h1></div>
+        </div>
+        <div class="pollutant-top-grid">
+          <article class="card pollutant-list">
+            <div class="card-title"><h2>Polutan Terkini</h2><small class="pollutant-location" id="pollutantLocation">Denpasar</small></div>
+            <div id="pollutantRows"></div>
+          </article>
+          <article class="card summary-card">
+            <div class="card-title"><h2>Ringkasan</h2><span data-icon="info"></span></div>
+            <p>Konsentrasi polutan selama 24 jam terakhir cenderung berfluktuasi. Peningkatan paling terlihat pada jam sibuk pagi dan sore, sementara kondisi membaik menjelang malam.</p>
+            <p>NO₂ dan PM2.5 menjadi polutan yang perlu diperhatikan karena paling mudah meningkat ketika lalu lintas padat dan sirkulasi udara rendah.</p>
+          </article>
+        </div>
+        <article class="card chart-card page-chart">
+          <div class="card-title">
+            <div><h2>Tren Polutan</h2><small>24 Jam Terakhir</small></div>
+            <div class="filter-dropdown" data-chart-filter="pollutant">
+              <button class="filter-trigger" type="button" aria-expanded="false"><span>Filter</span><b>⌄</b></button>
+              <div class="filter-menu"></div>
+            </div>
+          </div>
+          <div class="chart" data-chart="pollutant"></div>
+        </article>
+        <article class="card chart-card page-chart">
+          <div class="card-title">
+            <div><h2>Prediksi Polutan</h2><small>24 Jam Kedepan</small></div>
+            <div class="filter-dropdown" data-chart-filter="forecast">
+              <button class="filter-trigger" type="button" aria-expanded="false"><span>Filter</span><b>⌄</b></button>
+              <div class="filter-menu"></div>
+            </div>
+          </div>
+          <div class="chart" data-chart="forecast"></div>
+        </article>
+      </section>
+
+      <section class="page" id="page-history">
+        <div class="page-heading">
+          <div><p class="eyebrow">Arsip pemantauan</p><h1>Data Histori</h1></div>
+          <div class="heading-actions">
+            <label class="search-box"><span data-icon="search"></span><input id="historySearch" type="search" placeholder="Cari lokasi..."></label>
+            <button class="outline-button" id="downloadCsv"><span data-icon="download"></span> Unduh CSV</button>
+          </div>
+        </div>
+        <article class="card table-card">
+          <div class="table-toolbar">
+            <div class="date-filter"><span data-icon="calendar"></span><span>01 - 05 Des 2025</span></div>
+            <div class="filter-dropdown history-filter" id="historyCategoryFilter">
+              <button class="filter-trigger" type="button" aria-expanded="false"><span>Semua Kategori</span><b>⌄</b></button>
+              <div class="filter-menu">
+                <button class="filter-option selected" type="button" data-category="all"><i class="all-dot"></i><span>Semua Kategori</span><small>18</small></button>
+                <button class="filter-option" type="button" data-category="Baik"><i style="background:#00e400"></i><span>Baik</span><small>0–50</small></button>
+                <button class="filter-option" type="button" data-category="Sedang"><i style="background:#ffff00"></i><span>Sedang</span><small>51–100</small></button>
+                <button class="filter-option" type="button" data-category="Tidak Sehat (Populasi Sensitif)"><i style="background:#ff7e00"></i><span>Tidak Sehat (Populasi Sensitif)</span><small>101–150</small></button>
+                <button class="filter-option" type="button" data-category="Tidak Sehat"><i style="background:#ff0000"></i><span>Tidak Sehat</span><small>151–200</small></button>
+                <button class="filter-option" type="button" data-category="Sangat Tidak Sehat"><i style="background:#8f3f97"></i><span>Sangat Tidak Sehat</span><small>201–300</small></button>
+                <button class="filter-option" type="button" data-category="Berbahaya"><i style="background:#7e0023"></i><span>Berbahaya</span><small>301–500</small></button>
+              </div>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Lokasi</th><th>Waktu</th><th>Status</th><th>AQI</th><th>PM2.5</th><th>Kategori</th><th>Tren</th></tr></thead>
+              <tbody id="historyBody"></tbody>
+            </table>
+          </div>
+          <div class="pagination"><span id="rowCount">Menampilkan 18 data</span><div><button disabled>‹</button><button class="active">1</button><button>2</button><button>›</button></div></div>
+        </article>
+      </section>
+
+      <section class="page" id="page-accuracy">
+        <div class="page-heading">
+          <div><p class="eyebrow">Evaluasi prediksi</p><h1>Akurasi Model</h1></div>
+          <span class="last-evaluated"><i></i> Evaluasi terakhir: hari ini</span>
+        </div>
+        <div class="model-grid">
+          <article class="card model-card"><div class="model-header"><h2>Model 1</h2><span>Baseline</span></div><div class="model-stat"><span>MAE</span><strong>6.33%</strong></div><div class="model-stat"><span>RMSE</span><strong>0.7345</strong></div><div class="model-stat"><span>Akurasi</span><strong>91.5%</strong></div><div class="accuracy-bar"><i style="width:91.5%"></i></div></article>
+          <article class="card model-card"><div class="model-header"><h2>Model 2</h2><span>Hybrid</span></div><div class="model-stat"><span>MAE</span><strong>9.33%</strong></div><div class="model-stat"><span>RMSE</span><strong>0.5345</strong></div><div class="model-stat"><span>Akurasi</span><strong>89.5%</strong></div><div class="accuracy-bar"><i style="width:89.5%"></i></div></article>
+          <article class="card model-card best"><div class="model-header"><h2>Model 3</h2><span>Terbaik</span></div><div class="model-stat"><span>F1-Score</span><strong>0.96</strong></div><div class="model-stat"><span>Presisi</span><strong>0.95</strong></div><div class="model-stat"><span>Recall</span><strong>0.98</strong></div><div class="model-stat"><span>Akurasi</span><strong>94.94%</strong></div><div class="accuracy-bar"><i style="width:94.94%"></i></div></article>
+          <article class="card evaluation-card">
+            <div class="card-title"><h2>Ringkasan</h2><span data-icon="award"></span></div>
+            <p>Evaluasi menunjukkan bahwa Model 3 sangat efektif untuk tugas analisis/klasifikasi dengan tingkat akurasi <b>94.94%</b> dan metrik evaluasi yang tinggi.</p>
+            <p>Untuk kebutuhan prediksi, Model 1 memberikan akurasi 91.5% dan MAE 6.33% yang lebih baik daripada Model 2, meskipun Model 2 unggul pada nilai RMSE yang lebih rendah (0.5345).</p>
+          </article>
+        </div>
+      </section>
+    </main>
+    <div class="toast" id="toast"><span data-icon="check"></span><span id="toastMessage">Data berhasil diperbarui</span></div>
+  </div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+# Secrets
+backend/secrets.env
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+.venv/
+venv/
+env/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
+
+# Model files (besar, tidak perlu di repo)
+pipeline/source/saved_best_models/*.joblib
+
+# Data besar
+pipeline/source/Data_Final.csv
