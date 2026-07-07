@@ -73,8 +73,8 @@ PORT = int(os.environ.get("PORT", "4173"))
 # Interval refresh data kualitas udara dalam menit (default 60 menit = 1 jam)
 REFRESH_MINUTES = int(os.environ.get("REFRESH_MINUTES", "60"))
 
-# Interval refresh berita LLM dalam menit (default 180 menit = 3 jam)
-NEWS_REFRESH_MINUTES = int(os.environ.get("NEWS_REFRESH_MINUTES", "180"))
+# Interval refresh berita LLM dalam menit (default 60 menit = 1 jam)
+NEWS_REFRESH_MINUTES = int(os.environ.get("NEWS_REFRESH_MINUTES", "60"))
 
 # Buat aplikasi Flask — static_folder=None karena kita serve file manual lewat route
 app = Flask(__name__, static_folder=None)

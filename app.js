@@ -136,6 +136,7 @@ const POLLUTANT_NAMES = {
   so2: 'Sulfur dioksida (SO₂)', nh3: 'Amonia (NH₃)', no: 'Nitrogen monoksida (NO)'
 };
 
+
 // ============================================================
 // CHART RENDERER
 // ============================================================
@@ -218,6 +219,9 @@ let locations = [];
 const markers = {};
 let activeLocation = null;
 let historyData = [];
+let filteredHistory = [];
+let currentPage = 1;
+const rowsPerPage = 20;
 let categoryFilter = 'all';
 const pollutantSel = { pollutant: 'pm2_5', forecast: 'pm2_5' };
 const clampMeter = (value) => `${Math.max(6, Math.min(100, Math.round(value)))}%`;
@@ -242,8 +246,22 @@ function selectLocation(loc) {
   const aqiMeter = document.getElementById('aqiMeter');
   aqiMeter.style.width = clampMeter(loc.aqi / 3);
   aqiMeter.style.background = meterColor;
-  document.getElementById('aqiUpdate').textContent = `Terakhir diperbarui ${loc.update}`;
   document.getElementById('statusValue').textContent = loc.level;
+  const statusValue = document.getElementById('statusValue');
+
+  if (loc.aqi <= 50) {
+      statusValue.style.color = "#00e400";
+  } else if (loc.aqi <= 100) {
+      statusValue.style.color = "#ffff00";
+  } else if (loc.aqi <= 150) {
+      statusValue.style.color = "#ff7e00";
+  } else if (loc.aqi <= 200) {
+      statusValue.style.color = "#ff0000";
+  } else if (loc.aqi <= 300) {
+      statusValue.style.color = "#8f3f97";
+  } else {
+      statusValue.style.color = "#7e0023";
+  }
   // Alasan mudah dimengerti: AQI ditentukan oleh polutan dominan.
   const domName = POLLUTANT_NAMES[loc.dominant] || (loc.dominant ? loc.dominant.toUpperCase() : '');
   const reason = domName ? ` AQI ditentukan terutama oleh ${domName}.` : '';
@@ -405,17 +423,47 @@ function initMap() {
       iconAnchor: [14, 28]
     });
     const marker = L.marker([loc.lat, loc.lng], { icon }).addTo(map)
-      .bindPopup(`
+      marker.bindTooltip(`
         <div class="sensor-popup">
-          <div class="sensor-popup__head"><div><b>${loc.name}</b><small>${loc.station}</small></div><strong style="color:${loc.color}">${loc.aqi}</strong></div>
-          <span class="sensor-popup__status" style="color:${loc.color};background:${loc.color}18">${loc.level}</span>
-          <div class="sensor-popup__grid">
-            <span>PM2.5 <b>${loc.pm25} µg/m³</b></span><span>PM10 <b>${loc.pm10} µg/m³</b></span>
-            <span>Suhu <b>${loc.temp}°C</b></span><span>Kelembapan <b>${loc.humidity}%</b></span>
+          <div class="sensor-popup__head">
+            <div>
+              <b>${loc.name}</b>
+              <small>${loc.station}</small>
+            </div>
+            <strong style="color:${loc.color}">${loc.aqi}</strong>
           </div>
+
+          <span class="sensor-popup__status"
+            style="color:${loc.color};background:${loc.color}18">
+            ${loc.level}
+          </span>
+
+          <div class="sensor-popup__grid">
+            <span>PM2.5 <b>${loc.pm25} µg/m³</b></span>
+            <span>PM10 <b>${loc.pm10} µg/m³</b></span>
+            <span>Suhu <b>${loc.temp}°C</b></span>
+            <span>Kelembapan <b>${loc.humidity}%</b></span>
+          </div>
+
           <p>Polutan dominan: ${loc.dominant.toUpperCase()}.</p>
-          <small class="sensor-popup__time">Diperbarui ${loc.update}</small>
-        </div>`, { maxWidth: 260 });
+
+          <small class="sensor-popup__time">
+            Diperbarui ${loc.update}
+          </small>
+        </div>
+      `, {
+        sticky: true,
+        direction: 'top',
+        opacity: 1,
+        className: 'aqi-tooltip'
+      });
+    marker.on('mouseover', () => {
+      marker.openTooltip();
+    });
+
+    marker.on('mouseout', () => {
+      marker.closeTooltip();
+    });
     marker.on('click', () => selectLocation(loc));
     markers[loc.name] = marker;
   });
@@ -441,18 +489,133 @@ function sparkline(aqi, seed) {
 }
 
 function renderHistory() {
+
   const query = document.getElementById('historySearch').value.toLowerCase();
-  const filtered = historyData.filter((row) =>
+
+  filteredHistory = historyData.filter(row =>
     (categoryFilter === 'all' || row.category === categoryFilter) &&
     row.location.toLowerCase().includes(query)
   );
-  document.getElementById('historyBody').innerHTML = filtered.map((row, i) =>
-    `<tr><td><span class="location-cell"><i></i>${row.location}</span></td><td>${row.time}</td><td><span class="status-live">Aktif</span></td><td><b style="color:${getAqiCategory(row.aqi).color}">${row.aqi}</b></td><td>${row.pm25} <small style="color:#a0a9b1">µg/m³</small></td><td><span class="category" style="color:${getAqiCategory(row.aqi).color};background:${getAqiCategory(row.aqi).color}18">${row.category}</span></td><td>${sparkline(row.aqi, i)}</td></tr>`
+
+  // Reset ke halaman pertama jika halaman sekarang melebihi total halaman
+  const totalPages = Math.ceil(filteredHistory.length / rowsPerPage);
+
+  if (currentPage > totalPages && totalPages > 0) {
+    currentPage = totalPages;
+  }
+
+  const start = (currentPage - 1) * rowsPerPage;
+  const end = start + rowsPerPage;
+
+  const pageData = filteredHistory.slice(start, end);
+
+  document.getElementById('historyBody').innerHTML = pageData.map((row, i) =>
+    `<tr>
+      <td><span class="location-cell"><i></i>${row.location}</span></td>
+      <td>${row.time}</td>
+      <td><b style="color:${getAqiCategory(row.aqi).color}">${row.aqi}</b></td>
+      <td>${row.pm25} <small style="color:#a0a9b1">µg/m³</small></td>
+      <td>
+        <span class="category"
+          style="color:${getAqiCategory(row.aqi).color};
+          background:${getAqiCategory(row.aqi).color}18">
+          ${row.category}
+        </span>
+      </td>
+    </tr>`
   ).join('');
-  document.getElementById('rowCount').textContent = `Menampilkan ${filtered.length} data`;
+
+  document.getElementById('rowCount').textContent =
+    `Menampilkan ${filteredHistory.length === 0 ? 0 : start + 1}-${Math.min(end, filteredHistory.length)} dari ${filteredHistory.length} data`;
+
+  renderPagination();
 }
 
-document.getElementById('historySearch').addEventListener('input', renderHistory);
+function renderPagination() {
+  const totalPages = Math.ceil(filteredHistory.length / rowsPerPage);
+  const container = document.querySelector('.pagination div');
+
+  let html = '';
+
+  // Tombol sebelumnya
+  html += `<button ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(${currentPage - 1})">‹</button>`;
+
+  if (totalPages <= 3) {
+    // Jika halaman <=3 tampilkan semua
+    for (let i = 1; i <= totalPages; i++) {
+      html += `<button class="${i === currentPage ? 'active' : ''}"
+                onclick="changePage(${i})">${i}</button>`;
+    }
+  } else {
+
+    // Halaman pertama
+    html += `<button class="${currentPage === 1 ? 'active' : ''}"
+              onclick="changePage(1)">1</button>`;
+
+    if (currentPage <= 2) {
+
+      html += `
+      <button class="${currentPage===2?'active':''}"
+              onclick="changePage(2)">2</button>
+
+      <button class="${currentPage===3?'active':''}"
+              onclick="changePage(3)">3</button>
+
+      <span>...</span>
+
+      <button onclick="changePage(${totalPages})">${totalPages}</button>`;
+
+    } else if (currentPage >= totalPages-1) {
+
+      html += `<span>...</span>`;
+
+      html += `
+      <button class="${currentPage===totalPages-1?'active':''}"
+              onclick="changePage(${totalPages-1})">${totalPages-1}</button>
+
+      <button class="${currentPage===totalPages?'active':''}"
+              onclick="changePage(${totalPages})">${totalPages}</button>`;
+
+    } else {
+
+      html += `<span>...</span>`;
+
+      html += `
+      <button class="active"
+              onclick="changePage(${currentPage})">${currentPage}</button>
+
+      <button onclick="changePage(${currentPage+1})">
+        ${currentPage+1}
+      </button>
+
+      <span>...</span>
+
+      <button onclick="changePage(${totalPages})">${totalPages}</button>`;
+    }
+  }
+
+  // Tombol selanjutnya
+  html += `<button ${currentPage === totalPages ? 'disabled' : ''}
+            onclick="changePage(${currentPage + 1})">›</button>`;
+
+  container.innerHTML = html;
+}
+
+function changePage(page){
+
+    currentPage = page;
+
+    renderHistory();
+
+}
+
+document.getElementById('historySearch').addEventListener('input', () => {
+
+    currentPage = 1;
+
+    renderHistory();
+
+});
 document.querySelectorAll('#historyCategoryFilter .filter-option').forEach((option) => option.addEventListener('click', () => {
   categoryFilter = option.dataset.category;
   const dropdown = option.closest('.filter-dropdown');
@@ -460,6 +623,7 @@ document.querySelectorAll('#historyCategoryFilter .filter-option').forEach((opti
   dropdown.querySelector('.filter-trigger span').textContent = option.querySelector('span').textContent;
   dropdown.classList.remove('open');
   dropdown.querySelector('.filter-trigger').setAttribute('aria-expanded', 'false');
+  currentPage = 1;
   renderHistory();
 }));
 

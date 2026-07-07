@@ -182,7 +182,9 @@
       {"lat": -8.4935866, "lon": 115.249767, "description": "Neka Art Museum"},
       {"lat": -8.4753486, "lon": 115.2702825, "description": "Jl suweta, Sri wedari, tirta tawar"},
       {"lat": -8.4818246, "lon": 115.254908, "description": "Pyramids Of Chi"}
-    ],
+    ]
+  },
+  "Kabupaten Tabanan": {
     "Baturiti": [
       {"lat": -8.34663, "lon": 115.17515, "description": "Kantor Kecamatan Baturiti"},
       {"lat": -8.275305, "lon": 115.166258, "description": "Pura Ulun Danu Beratan"},

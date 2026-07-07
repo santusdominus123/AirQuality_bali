@@ -50,7 +50,8 @@ USE_MODELS = os.environ.get("USE_MODELS", "1") != "0"
 
 # ── Konfigurasi API ───────────────────────────────────────────────────────────
 # API key OpenWeather — bisa di-set via env OPENWEATHER_API_KEY
-API_KEY = os.environ.get("OPENWEATHER_API_KEY", "")
+def get_api_key():
+    return os.environ.get("OPENWEATHER_API_KEY", "")
 
 # URL endpoint OpenWeather untuk data polutan historis
 OPENWEATHER_AIR_URL = "http://api.openweathermap.org/data/2.5/air_pollution/history"
@@ -65,8 +66,6 @@ TZ = ZoneInfo(TIMEZONE)
 # ── Konfigurasi Sampling ──────────────────────────────────────────────────────
 # Jumlah titik koordinat yang di-fetch per kecamatan
 # Lebih tinggi = lebih akurat tapi lebih banyak API call
-# 588 titik total di 57 kecamatan → default 2 titik per kecamatan = ~114 API call
-POINTS_PER_KECAMATAN = int(os.environ.get("POINTS_PER_KECAMATAN", "2"))
 
 # Jumlah thread paralel untuk fetch data polutan (lebih banyak = lebih cepat)
 AIR_WORKERS = int(os.environ.get("AIR_WORKERS", "6"))
@@ -325,8 +324,8 @@ def load_points():
                 acc[reg][0].append(p["lat"])
                 acc[reg][1].append(p["lon"])
 
-            # Ambil hanya N titik pertama per kecamatan untuk di-fetch
-            for p in pts[:POINTS_PER_KECAMATAN]:
+            # Ambil titik per kecamatan untuk di-fetch
+            for p in pts:
                 points.append({
                     "regency":  reg,
                     "district": district,
@@ -362,6 +361,9 @@ def fetch_json(url, params):
         except requests.RequestException:
             pass  # koneksi gagal — coba lagi
         time.sleep(1.5 * attempt)  # tunggu makin lama setiap kali gagal
+
+    print("STATUS:", r.status_code)
+    print("RESPONSE:", r.text[:200])
     return None  # semua percobaan gagal
 
 
@@ -389,7 +391,7 @@ def fetch_air(points, start_unix, end_unix):
             "lon":   pt["lon"],
             "start": start_unix,
             "end":   end_unix,
-            "appid": API_KEY,
+            "appid": get_api_key(),
         })
         out = []
         if not data or "list" not in data:
@@ -469,7 +471,7 @@ def fetch_weather(points):
 
 
 # ==============================================================================
-# FUNGSI AGREGASI — Rata-rata titik → kecamatan → kabupaten
+# FUNGSI AGREGASI — Rata-rata titik → kabupaten
 # ==============================================================================
 
 def mean(xs):
@@ -484,37 +486,19 @@ def mean(xs):
 
 def aggregate(rows, cols):
     """
-    Rata-rata data dari level titik → kecamatan → kabupaten/kota.
-
-    Menggunakan "equal-district mean": tiap kecamatan punya bobot yang sama
-    (tidak bergantung berapa banyak titik di kecamatan itu).
-    Ini mencegah kabupaten dengan kecamatan besar mendominasi rata-rata.
-
-    Langkah:
-      1. Rata-rata semua titik dalam satu kecamatan → nilai kecamatan
-      2. Rata-rata semua nilai kecamatan → nilai kabupaten
-
-    Parameter:
-        rows (list): baris data mentah [{timestamp_hour, regency, district, ...}]
-        cols (list): kolom yang diagregasi
-
-    Return:
-        dict: {(timestamp_hour, regency): {col: value, ...}}
+    Rata-rata langsung semua titik dalam satu kabupaten.
     """
-    # LEVEL 1: rata-rata per (timestamp, kabupaten, kecamatan)
-    district = defaultdict(lambda: defaultdict(list))
-    for r in rows:
-        key = (r["timestamp_hour"], r["regency"], r["district"])
-        for c in cols:
-            district[key][c].append(r.get(c))  # kumpulkan semua nilai dari titik di kecamatan ini
-    district_avg = {k: {c: mean(v) for c, v in cv.items()} for k, cv in district.items()}
-
-    # LEVEL 2: rata-rata nilai kecamatan → nilai kabupaten
     regency = defaultdict(lambda: defaultdict(list))
-    for (ts, reg, _dist), cv in district_avg.items():
-        for c, v in cv.items():
-            regency[(ts, reg)][c].append(v)  # kumpulkan nilai tiap kecamatan untuk kabupaten ini
-    return {k: {c: mean(v) for c, v in cv.items()} for k, cv in regency.items()}
+
+    for r in rows:
+        key = (r["timestamp_hour"], r["regency"])
+        for c in cols:
+            regency[key][c].append(r.get(c))
+
+    return {
+        k: {c: mean(v) for c, v in cv.items()}
+        for k, cv in regency.items()
+    }
 
 
 def relative_age(latest_ts):

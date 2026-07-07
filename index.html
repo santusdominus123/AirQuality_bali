@@ -66,7 +66,6 @@
             <div class="metric-head"><span id="metricLocation">Denpasar</span><small>Rata - Rata AQI</small></div>
             <strong id="aqiValue">81</strong>
             <div class="meter"><i id="aqiMeter" style="width:54%; background:#f4b740"></i></div>
-            <small id="aqiUpdate">Terakhir diperbarui 2 menit lalu</small>
           </article>
           <article class="metric-card status-card">
             <div class="metric-head"><strong id="statusValue" class="status-head">Sedang</strong><small>Index AQI</small></div>
@@ -217,7 +216,7 @@
           </div>
           <div class="table-scroll">
             <table>
-              <thead><tr><th>Lokasi</th><th>Waktu</th><th>Status</th><th>AQI</th><th>PM2.5</th><th>Kategori</th><th>Tren</th></tr></thead>
+              <thead><tr><th>Lokasi</th><th>Waktu</th><th>AQI</th><th>PM2.5</th><th>Kategori</th></tr></thead>
               <tbody id="historyBody"></tbody>
             </table>
           </div>
@@ -228,16 +227,174 @@
       <section class="page" id="page-accuracy">
         <div class="page-heading">
           <div><p class="eyebrow">Evaluasi prediksi</p><h1>Akurasi Model</h1></div>
-          <span class="last-evaluated"><i></i> Evaluasi terakhir: hari ini</span>
         </div>
         <div class="model-grid">
-          <article class="card model-card"><div class="model-header"><h2>Model 1</h2><span>Baseline</span></div><div class="model-stat"><span>MAE</span><strong>6.33%</strong></div><div class="model-stat"><span>RMSE</span><strong>0.7345</strong></div><div class="model-stat"><span>Akurasi</span><strong>91.5%</strong></div><div class="accuracy-bar"><i style="width:91.5%"></i></div></article>
-          <article class="card model-card"><div class="model-header"><h2>Model 2</h2><span>Hybrid</span></div><div class="model-stat"><span>MAE</span><strong>9.33%</strong></div><div class="model-stat"><span>RMSE</span><strong>0.5345</strong></div><div class="model-stat"><span>Akurasi</span><strong>89.5%</strong></div><div class="accuracy-bar"><i style="width:89.5%"></i></div></article>
-          <article class="card model-card best"><div class="model-header"><h2>Model 3</h2><span>Terbaik</span></div><div class="model-stat"><span>F1-Score</span><strong>0.96</strong></div><div class="model-stat"><span>Presisi</span><strong>0.95</strong></div><div class="model-stat"><span>Recall</span><strong>0.98</strong></div><div class="model-stat"><span>Akurasi</span><strong>94.94%</strong></div><div class="accuracy-bar"><i style="width:94.94%"></i></div></article>
-          <article class="card evaluation-card">
-            <div class="card-title"><h2>Ringkasan</h2><span data-icon="award"></span></div>
-            <p>Evaluasi menunjukkan bahwa Model 3 sangat efektif untuk tugas analisis/klasifikasi dengan tingkat akurasi <b>94.94%</b> dan metrik evaluasi yang tinggi.</p>
-            <p>Untuk kebutuhan prediksi, Model 1 memberikan akurasi 91.5% dan MAE 6.33% yang lebih baik daripada Model 2, meskipun Model 2 unggul pada nilai RMSE yang lebih rendah (0.5345).</p>
+            <article class="card model-card">
+              <div class="model-header">
+                  <h2>CO</h2>
+                  <span>Random Forest Terbaik</span>
+              </div>
+
+              <hr>
+
+              <div class="model-stat"><span>Random Forest</span></div>
+              <div class="model-stat"><span>R²</span><strong>0.9889</strong></div>
+              <div class="model-stat"><span>MAE</span><strong>2.1782</strong></div>
+              <div class="model-stat"><span>RMSE</span><strong>6.4829</strong></div>
+
+              <hr>
+              
+              <div class="model-stat"><span>XGBoost</span></div>
+              <div class="model-stat"><span>R²</span><strong>0.9705</strong></div>
+              <div class="model-stat"><span>MAE</span><strong>6.3637</strong></div>
+              <div class="model-stat"><span>RMSE</span><strong>10.5681</strong></div>
+          </article>
+
+          <article class="card model-card">
+              <div class="model-header">
+                  <h2>NO</h2>
+                  <span>XGBoost Terbaik</span>
+              </div>
+
+              <hr>
+
+              <div class="model-stat"><span>Random Forest</span></div>
+              <div class="model-stat"><span>R²</span><strong>0.8561</strong></div>
+              <div class="model-stat"><span>MAE</span><strong>0.0013</strong></div>
+              <div class="model-stat"><span>RMSE</span><strong>0.0051</strong></div>
+
+              <hr>
+              
+              <div class="model-stat"><span>XGBoost</span></div>
+              <div class="model-stat"><span>R²</span><strong>0.8667</strong></div>
+              <div class="model-stat"><span>MAE</span><strong>0.0021</strong></div>
+              <div class="model-stat"><span>RMSE</span><strong>0.0049</strong></div>
+          </article>
+
+          <article class="card model-card">
+              <div class="model-header">
+                  <h2>NO²</h2>
+                  <span>Random Forest Terbaik</span>
+              </div>
+
+              <hr>
+
+              <div class="model-stat"><span>Random Forest</span></div>
+              <div class="model-stat"><span>R²</span><strong>0.9746</strong></div>
+              <div class="model-stat"><span>MAE</span><strong>0.0180</strong></div>
+              <div class="model-stat"><span>RMSE</span><strong>0.0506</strong></div>
+
+              <hr>
+              
+              <div class="model-stat"><span>XGBoost</span></div>
+              <div class="model-stat"><span>R²</span><strong>0.9576</strong></div>
+              <div class="model-stat"><span>MAE</span><strong>0.0324</strong></div>
+              <div class="model-stat"><span>RMSE</span><strong>0.0654</strong></div>
+          </article>
+
+          <article class="card model-card">
+              <div class="model-header">
+                  <h2>O³ </h2>
+                  <span>Random Forest Terbaik</span>
+              </div>
+
+              <hr>
+
+              <div class="model-stat"><span>Random Forest</span></div>
+              <div class="model-stat"><span>R²</span><strong>0.9935</strong></div>
+              <div class="model-stat"><span>MAE</span><strong>0.5479</strong></div>
+              <div class="model-stat"><span>RMSE</span><strong>1.1416</strong></div>
+
+              <hr>
+              
+              <div class="model-stat"><span>XGBoost</span></div>
+              <div class="model-stat"><span>R²</span><strong>0.9642</strong></div>
+              <div class="model-stat"><span>MAE</span><strong>1.9454</strong></div>
+              <div class="model-stat"><span>RMSE</span><strong>2.6863</strong></div>
+          </article>
+
+          <article class="card model-card">
+              <div class="model-header">
+                  <h2>SO²</h2>
+                  <span>Random Forest Terbaik</span>
+              </div>
+
+              <hr>
+
+              <div class="model-stat"><span>Random Forest</span></div>
+              <div class="model-stat"><span>R²</span><strong>0.9768</strong></div>
+              <div class="model-stat"><span>MAE</span><strong>0.0075</strong></div>
+              <div class="model-stat"><span>RMSE</span><strong>0.0203</strong></div>
+
+              <hr>
+              
+              <div class="model-stat"><span>XGBoost</span></div>
+              <div class="model-stat"><span>R²</span><strong>0.9566</strong></div>
+              <div class="model-stat"><span>MAE</span><strong>	0.0177</strong></div>
+              <div class="model-stat"><span>RMSE</span><strong>0.0279</strong></div>
+          </article>
+
+          <article class="card model-card">
+              <div class="model-header">
+                  <h2>PM2.5</h2>
+                  <span>Random Forest Terbaik</span>
+              </div>
+
+              <hr>
+
+              <div class="model-stat"><span>Random Forest</span></div>
+              <div class="model-stat"><span>R²</span><strong>0.9853</strong></div>
+              <div class="model-stat"><span>MAE</span><strong>0.2440</strong></div>
+              <div class="model-stat"><span>RMSE</span><strong>0.6206</strong></div>
+
+              <hr>
+              
+              <div class="model-stat"><span>XGBoost</span></div>
+              <div class="model-stat"><span>R²</span><strong>0.9569</strong></div>
+              <div class="model-stat"><span>MAE</span><strong>0.6697</strong></div>
+              <div class="model-stat"><span>RMSE</span><strong>1.0661</strong></div>
+          </article>
+
+          <article class="card model-card">
+              <div class="model-header">
+                  <h2>PM10</h2>
+                  <span>Random Forest Terbaik</span>
+              </div>
+
+              <hr>
+
+              <div class="model-stat"><span>Random Forest</span></div>
+              <div class="model-stat"><span>R²</span><strong>0.9922</strong></div>
+              <div class="model-stat"><span>MAE</span><strong>0.4706</strong></div>
+              <div class="model-stat"><span>RMSE</span><strong>0.8647</strong></div>
+
+              <hr>
+              
+              <div class="model-stat"><span>XGBoost</span></div>
+              <div class="model-stat"><span>R²</span><strong>0.9639</strong></div>
+              <div class="model-stat"><span>MAE</span><strong>1.3567</strong></div>
+              <div class="model-stat"><span>RMSE</span><strong>1.8696</strong></div>
+          </article>
+
+          <article class="card model-card">
+              <div class="model-header">
+                  <h2>NH³</h2>
+                  <span>XGBoost Terbaik</span>
+              </div>
+
+              <hr>
+
+              <div class="model-stat"><span>Random Forest</span></div>
+              <div class="model-stat"><span>R²</span><strong>0.9209</strong></div>
+              <div class="model-stat"><span>MAE</span><strong>0.0172</strong></div>
+              <div class="model-stat"><span>RMSE</span><strong>0.0472</strong></div>
+
+              <hr>
+              
+              <div class="model-stat"><span>XGBoost</span></div>
+              <div class="model-stat"><span>R²</span><strong>0.9305</strong></div>
+              <div class="model-stat"><span>MAE</span><strong>0.0223</strong></div>
+              <div class="model-stat"><span>RMSE</span><strong>0.0442</strong></div>
           </article>
         </div>
       </section>
