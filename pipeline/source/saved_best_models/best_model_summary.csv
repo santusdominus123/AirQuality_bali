@@ -1,0 +1,9 @@
+pollutant,best_model,model_code,target,prediction_meaning,MAE,RMSE,R2,model_path
+co,Random Forest Regressor,random_forest,co_target_24h,prediksi nilai polutan 24 jam setelah timestamp input,2.178238362152501,6.482939390378499,0.9889030200750146,D:/saved_best_models\co_best_model.joblib
+nh3,XGBoost Regressor,xgboost,nh3_target_24h,prediksi nilai polutan 24 jam setelah timestamp input,0.022365461792838038,0.04425524919165434,0.930556682882476,D:/saved_best_models\nh3_best_model.joblib
+no,XGBoost Regressor,xgboost,no_target_24h,prediksi nilai polutan 24 jam setelah timestamp input,0.002122851371169925,0.004941193154992146,0.8667622774645876,D:/saved_best_models\no_best_model.joblib
+no2,Random Forest Regressor,random_forest,no2_target_24h,prediksi nilai polutan 24 jam setelah timestamp input,0.01800664188455698,0.05063215457014196,0.9746500652529974,D:/saved_best_models\no2_best_model.joblib
+o3,Random Forest Regressor,random_forest,o3_target_24h,prediksi nilai polutan 24 jam setelah timestamp input,0.5479462264886009,1.1416446695692133,0.993539271569105,D:/saved_best_models\o3_best_model.joblib
+pm10,Random Forest Regressor,random_forest,pm10_target_24h,prediksi nilai polutan 24 jam setelah timestamp input,0.47063985368082817,0.8647202082430391,0.9922922481570845,D:/saved_best_models\pm10_best_model.joblib
+pm2_5,Random Forest Regressor,random_forest,pm2_5_target_24h,prediksi nilai polutan 24 jam setelah timestamp input,0.24409624643046052,0.6206887098314673,0.9853977730287322,D:/saved_best_models\pm2_5_best_model.joblib
+so2,Random Forest Regressor,random_forest,so2_target_24h,prediksi nilai polutan 24 jam setelah timestamp input,0.007555911308052191,0.02038475540776622,0.9768947098678339,D:/saved_best_models\so2_best_model.joblib

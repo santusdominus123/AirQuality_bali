@@ -75,15 +75,7 @@
         "pm10_rolling_avg_24",
         "nh3_rolling_avg_3",
         "nh3_rolling_avg_6",
-        "nh3_rolling_avg_24",
-        "regency_Kabupaten Badung",
-        "regency_Kabupaten Bangli",
-        "regency_Kabupaten Buleleng",
-        "regency_Kabupaten Gianyar",
-        "regency_Kabupaten Jembrana",
-        "regency_Kabupaten Karangasem",
-        "regency_Kabupaten Klungkung",
-        "regency_Kota Denpasar"
+        "nh3_rolling_avg_24"
     ],
     "pollutant_cols": [
         "co",

@@ -80,6 +80,22 @@ NEWS_REFRESH_MINUTES = int(os.environ.get("NEWS_REFRESH_MINUTES", "180"))
 app = Flask(__name__, static_folder=None)
 
 
+@app.after_request
+def _strip_content_disposition(resp):
+    """
+    Hapus header Content-Disposition dari semua respons.
+
+    Werkzeug 3.1+ otomatis menambahkan 'Content-Disposition: inline; filename=...'
+    pada send_from_directory. Beberapa proxy/tunnel (mis. VS Code Dev Tunnels)
+    memperlakukan header ini sebagai perintah UNDUH, sehingga halaman HTML/JS
+    malah ter-download alih-alih ditampilkan. Aplikasi ini tidak pernah
+    menyajikan file untuk diunduh dari server (unduhan CSV dibuat di sisi
+    browser), jadi header ini aman dihapus total.
+    """
+    resp.headers.pop("Content-Disposition", None)
+    return resp
+
+
 # ==============================================================================
 # STATE — Status pipeline disimpan di sini (diakses antar thread)
 # ==============================================================================

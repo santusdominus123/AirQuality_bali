@@ -71,6 +71,80 @@ function getAqiCategory(aqi) {
   if (aqi <= 300) return { label: 'Sangat Tidak Sehat', color: '#8f3f97' };
   return { label: 'Berbahaya', color: '#7e0023' };
 }
+// Narasi Analisis Risiko berbasis AQI hasil prediksi 24 jam (bukan PM2.5).
+// Deterministik dari deret pred.aqi: puncak + jamnya, rentang, dan arah tren.
+function aqiRiskNarrative(pred) {
+  const aqi = pred && pred.aqi ? pred.aqi.filter((v) => v != null) : [];
+  if (!aqi.length) return 'Data prediksi AQI 24 jam ke depan belum tersedia.';
+  const peak = Math.max(...aqi);
+  const low = Math.min(...aqi);
+  const peakHour = (pred.labels && pred.labels[pred.aqi.indexOf(peak)]) || '-';
+  const cat = getAqiCategory(peak).label;
+  const start = aqi[0];
+  const end = aqi[aqi.length - 1];
+  const tren = end > start + 3 ? 'cenderung meningkat'
+    : end < start - 3 ? 'cenderung menurun'
+    : 'relatif stabil';
+  return `Prediksi AQI 24 jam ke depan ${tren}, dengan puncak AQI ${peak} `
+    + `(kategori ${cat}) sekitar pukul ${peakHour}. `
+    + `Nilai AQI diperkirakan berkisar ${low}–${peak}.`;
+}
+// Set textContent bila elemen & teks ada (aman jika elemen tidak ditemukan).
+function setText(id, text) {
+  const el = document.getElementById(id);
+  if (el && text) el.textContent = text;
+}
+function domLabel(key) {
+  return POLLUTANT_NAMES[key] || (key ? String(key).toUpperCase() : 'polutan');
+}
+// Fallback ringkasan (dipakai bila LLM belum jalan) — berbasis data terukur.
+function defaultIndexSummary(loc, pred) {
+  const cat = getAqiCategory(loc.aqi).label;
+  let s = `${loc.name} saat ini memiliki AQI ${loc.aqi} (kategori ${cat}) dengan polutan dominan ${domLabel(loc.dominant)}.`;
+  if (pred && pred.aqi && pred.aqi.length) {
+    s += ` Prediksi 24 jam ke depan mencapai puncak AQI ${Math.max(...pred.aqi)}.`;
+  }
+  return s;
+}
+function defaultPollutantSummary(loc) {
+  return `Polutan dominan saat ini adalah ${domLabel(loc.dominant)}. `
+    + 'Konsentrasi polutan cenderung berfluktuasi mengikuti jam sibuk lalu lintas dan sirkulasi udara.';
+}
+function defaultPredictionSummary(pred) {
+  if (!pred || !pred.aqi || !pred.aqi.length) {
+    return 'Ringkasan hasil prediksi polutan 24 jam ke depan belum tersedia.';
+  }
+  const peak = Math.max(...pred.aqi);
+  const peakHour = (pred.labels && pred.labels[pred.aqi.indexOf(peak)]) || '-';
+  return `Hasil prediksi 24 jam ke depan menunjukkan AQI memuncak di ${peak} `
+    + `(kategori ${getAqiCategory(peak).label}) sekitar pukul ${peakHour}, `
+    + 'berdasarkan prediksi konsentrasi tiap polutan dari model.';
+}
+// Render halaman Akurasi Model dari data/accuracy.json (metrik per polutan).
+function renderAccuracy() {
+  const grid = document.getElementById('modelGrid');
+  const models = DATA.accuracy && DATA.accuracy.models;
+  if (!grid || !models || !models.length) return;
+  const labelMap = { co: 'CO', no: 'NO', no2: 'NO₂', o3: 'O₃', so2: 'SO₂', pm2_5: 'PM2.5', pm10: 'PM10', nh3: 'NH₃' };
+  const best = models.reduce((a, b) => (b.r2 > a.r2 ? b : a), models[0]);
+  const cards = models.map((m) => {
+    const width = Math.max(0, Math.min(100, m.r2 * 100)).toFixed(1);
+    return `<article class="card model-card${m === best ? ' best' : ''}">`
+      + `<div class="model-header"><h2>${labelMap[m.pollutant] || m.pollutant}</h2><span>${m.model}</span></div>`
+      + `<div class="model-stat"><span>R²</span><strong>${m.r2.toFixed(3)}</strong></div>`
+      + `<div class="model-stat"><span>RMSE</span><strong>${m.rmse.toFixed(3)}</strong></div>`
+      + `<div class="model-stat"><span>MAE</span><strong>${m.mae.toFixed(3)}</strong></div>`
+      + `<div class="accuracy-bar"><i style="width:${width}%"></i></div></article>`;
+  }).join('');
+  const avgR2 = models.reduce((s, m) => s + m.r2, 0) / models.length;
+  const summary = '<article class="card evaluation-card">'
+    + '<div class="card-title"><h2>Ringkasan</h2><span data-icon="award"></span></div>'
+    + `<p>Evaluasi ${models.length} model prediksi polutan (24 jam ke depan) menghasilkan rata-rata R² `
+    + `<b>${(avgR2 * 100).toFixed(1)}%</b>. Performa terbaik pada <b>${labelMap[best.pollutant] || best.pollutant}</b> `
+    + `(${best.model}) dengan R² <b>${best.r2.toFixed(3)}</b> dan RMSE ${best.rmse.toFixed(3)}.</p>`
+    + '<p>Nilai R² yang tinggi menandakan model mampu menjelaskan variasi data polutan dengan baik.</p></article>';
+  grid.innerHTML = cards + summary;
+}
 function catKey(aqi) {
   if (aqi <= 50) return 'baik';
   if (aqi <= 100) return 'sedang';
@@ -306,7 +380,16 @@ function selectLocation(loc) {
     const risk = peak <= 50 ? 'Rendah' : peak <= 100 ? 'Sedang' : peak <= 150 ? 'Cukup Tinggi' : 'Tinggi';
     const riskEl = document.querySelector('#page-dashboard .risk-score strong');
     if (riskEl) riskEl.textContent = risk;
+    // Analisis Risiko: narasi berbasis AQI prediksi (bukan PM2.5).
+    setText('riskText', aqiRiskNarrative(pred));
   }
+
+  // Ringkasan LLM: index (dashboard), polutan & prediksi (Info Polutan).
+  // Pakai hasil LLM per kabupaten bila ada; jika tidak, fallback dari data terukur.
+  const llmField = (f) => (llm && !llm.error && llm[f]) ? llm[f] : null;
+  setText('indexSummary', llmField('ringkasanIndex') || defaultIndexSummary(loc, pred));
+  setText('pollutantSummary', llmField('ringkasanPolutan') || defaultPollutantSummary(loc));
+  setText('predictionSummary', llmField('ringkasanPrediksi') || defaultPredictionSummary(pred));
 
   // Info Polutan mengikuti lokasi
   renderPollutants();
@@ -538,6 +621,14 @@ async function loadData() {
   } catch (_e) {
     DATA.news = null;
   }
+
+  // accuracy.json opsional — metrik model untuk halaman Akurasi.
+  try {
+    const r = await fetch('data/accuracy.json', { cache: 'no-store' });
+    DATA.accuracy = r.ok ? await r.json() : null;
+  } catch (_e) {
+    DATA.accuracy = null;
+  }
 }
 
 async function init() {
@@ -549,8 +640,8 @@ async function init() {
     return;
   }
 
-  // Topbar date = latest record in the dataset.
-  document.getElementById('currentDate').textContent = formatDate(DATA.current.meta.dataLatest);
+  // Topbar date = latest record in the dataset (elemen opsional).
+  setText('currentDate', formatDate(DATA.current.meta.dataLatest));
 
   // Data Histori
   historyData = DATA.history.rows.map((r) => ({
@@ -563,6 +654,7 @@ async function init() {
     if (rangeEl) rangeEl.textContent = `${shortDate(times[0])} - ${shortDate(times[times.length - 1])}`;
   }
   renderHistory();
+  renderAccuracy();
   setupPollutantFilters();
 
   buildLocations();

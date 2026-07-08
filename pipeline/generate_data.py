@@ -23,6 +23,7 @@ Hanya menggunakan standard library Python — tanpa dependencies eksternal.
 """
 
 import csv      # baca file CSV baris per baris
+import csv      # baca file CSV prediksi & akurasi model
 import json     # baca/tulis file JSON
 import os       # operasi path dan file system
 from collections import defaultdict  # dictionary dengan nilai default otomatis
@@ -42,6 +43,13 @@ os.makedirs(OUT, exist_ok=True)  # buat folder data/ jika belum ada
 CSV_PATH = os.path.join(SRC, "Data_Final.csv")
 COORD_PATH = os.path.join(SRC, "koordinat.json")
 
+# Prediksi 24 jam ke depan hasil model ML (dari Project Air Quality 2 terbaru).
+# Berisi kolom *_pred_24h + aqi_score_pred_24h + dominant_pollutant_pred_24h per jam.
+PRED_CSV_PATH = os.path.join(SRC, "prediction_24h_aqi.csv")
+
+# Ringkasan metrik model terbaik per polutan (MAE/RMSE/R²) hasil training terbaru.
+ACCURACY_CSV_PATH = os.path.join(SRC, "saved_best_models", "best_model_summary.csv")
+
 # Nama tampilan pendek untuk setiap kabupaten/kota (dari nama resmi ke nama singkat)
 DISPLAY = {
     "Kota Denpasar":       "Denpasar",
@@ -52,6 +60,7 @@ DISPLAY = {
     "Kabupaten Karangasem":"Karangasem",
     "Kabupaten Bangli":    "Bangli",
     "Kabupaten Klungkung": "Klungkung",
+    "Kabupaten Tabanan":   "Tabanan",
 }
 
 # Daftar nama kolom polutan di dataset
@@ -228,14 +237,50 @@ def build_trend(by_regency):
 
 def build_prediction(by_regency):
     """
-    Bangun prediction.json — prediksi 24 jam ke depan menggunakan
-    rata-rata klimatologis (pola diurnal historis 30 hari terakhir).
+    Bangun prediction.json — prediksi 24 jam ke depan.
 
-    Metode:
-      Untuk setiap jam ke depan (1..24), hitung rata-rata nilai polutan
-      pada jam yang sama (hour-of-day) dari 30 hari data historis.
-      Ini adalah baseline sederhana yang transparan dan akurat untuk
-      pola yang berulang tiap hari (seperti puncak polusi jam macet pagi).
+    Sumber utama: prediction_24h_aqi.csv (hasil model ML terbaru dari
+    Project Air Quality 2). Jika file tidak ada, fallback ke rata-rata
+    klimatologis (pola diurnal historis) via _build_prediction_climatology().
+
+    Return:
+        dict: {nama_singkat: {labels, aqi, pm25, pm10}}
+    """
+    if os.path.exists(PRED_CSV_PATH):
+        return _build_prediction_from_csv()
+    print("  prediction_24h_aqi.csv tidak ada — fallback ke klimatologis")
+    return _build_prediction_climatology(by_regency)
+
+
+def _build_prediction_from_csv():
+    """
+    Baca prediksi 24 jam ke depan dari prediction_24h_aqi.csv (output model ML).
+
+    Kolom yang dipakai: timestamp_hour, regency, aqi_score_pred_24h,
+    pm2_5_pred_24h, pm10_pred_24h — dikelompokkan per kabupaten dan diurutkan
+    berdasarkan waktu untuk membentuk deret 24 jam.
+    """
+    buckets = defaultdict(list)  # {regency: [row, ...]}
+    with open(PRED_CSV_PATH, encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            buckets[row["regency"]].append(row)
+
+    pred = {}
+    for reg, rows in buckets.items():
+        rows.sort(key=lambda r: r["timestamp_hour"])  # urutkan lama → baru
+        pred[DISPLAY.get(reg, reg)] = {
+            "labels": [hour_label(r["timestamp_hour"]) for r in rows],
+            "aqi":    [round(fnum(r["aqi_score_pred_24h"])) for r in rows],
+            "pm25":   [round(fnum(r["pm2_5_pred_24h"]), 1) for r in rows],
+            "pm10":   [round(fnum(r["pm10_pred_24h"]), 1) for r in rows],
+        }
+    return pred
+
+
+def _build_prediction_climatology(by_regency):
+    """
+    Fallback: prediksi 24 jam ke depan via rata-rata klimatologis
+    (pola diurnal historis 30 hari terakhir). Dipakai bila CSV model tak ada.
 
     Return:
         dict: {nama_singkat: {labels, aqi, pm25, pm10}}
@@ -413,10 +458,13 @@ def build_history(by_regency, hours=48):
 # Metrik akurasi model ML — diambil dari hasil evaluasi di train.ipynb
 # Menampilkan performa terbaik antara RandomForest vs XGBoost per polutan
 # berdasarkan nilai RMSE terendah pada test set yang dipegang (held-out)
-ACCURACY = {
+# Urutan tampil polutan agar konsisten di dashboard (bukan urutan CSV)
+_ACCURACY_ORDER = ["co", "no", "no2", "o3", "so2", "pm2_5", "pm10", "nh3"]
+
+# Fallback bila best_model_summary.csv tidak tersedia
+_ACCURACY_FALLBACK = {
     "generatedFrom": "train.ipynb (RandomForest vs XGBoost, best per pollutant by RMSE)",
     "models": [
-        # Format: polutan, model terbaik, MAE, RMSE, R² (semakin tinggi R² semakin baik)
         {"pollutant": "co",    "model": "Random Forest", "mae": 3.230530, "rmse": 9.265182,  "r2": 0.978166},
         {"pollutant": "no",    "model": "XGBoost",       "mae": 0.002214, "rmse": 0.005719,  "r2": 0.805051},
         {"pollutant": "no2",   "model": "Random Forest", "mae": 0.021022, "rmse": 0.062066,  "r2": 0.959024},
@@ -427,6 +475,47 @@ ACCURACY = {
         {"pollutant": "nh3",   "model": "XGBoost",       "mae": 0.021602, "rmse": 0.049405,  "r2": 0.905252},
     ],
 }
+
+
+def _pretty_model_name(raw):
+    """Rapikan nama model dari CSV (mis. 'Random Forest Regressor' → 'Random Forest')."""
+    name = (raw or "").strip()
+    return name.replace(" Regressor", "").replace(" Classifier", "") or "—"
+
+
+def build_accuracy():
+    """
+    Bangun accuracy.json dari best_model_summary.csv (metrik model terbaru).
+
+    Kolom yang dipakai: pollutant, best_model, MAE, RMSE, R2.
+    Jika file tidak ada / gagal dibaca, pakai _ACCURACY_FALLBACK.
+
+    Return:
+        dict: {generatedFrom, models: [{pollutant, model, mae, rmse, r2}, ...]}
+    """
+    if not os.path.exists(ACCURACY_CSV_PATH):
+        print("  best_model_summary.csv tidak ada — pakai metrik fallback")
+        return _ACCURACY_FALLBACK
+
+    by_pollutant = {}
+    with open(ACCURACY_CSV_PATH, encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            p = row["pollutant"].strip()
+            by_pollutant[p] = {
+                "pollutant": p,
+                "model": _pretty_model_name(row.get("best_model")),
+                "mae":  round(fnum(row.get("MAE")), 6),
+                "rmse": round(fnum(row.get("RMSE")), 6),
+                "r2":   round(fnum(row.get("R2")), 6),
+            }
+
+    # Susun sesuai urutan tampil; polutan tak dikenal ditaruh di belakang
+    ordered = [by_pollutant[p] for p in _ACCURACY_ORDER if p in by_pollutant]
+    ordered += [v for k, v in by_pollutant.items() if k not in _ACCURACY_ORDER]
+    return {
+        "generatedFrom": "best_model_summary.csv (RandomForest vs XGBoost, best per pollutant)",
+        "models": ordered,
+    }
 
 
 def write(name, obj):
@@ -475,7 +564,7 @@ def main():
     write("pollutant_series.json", build_pollutant_series(by_regency))
     write("history.json",          {"meta": meta, "rows": build_history(by_regency)})
     write("points.json",           {"points": build_points()})
-    write("accuracy.json",         ACCURACY)
+    write("accuracy.json",         build_accuracy())
 
     print("Done.")
 

@@ -19,5 +19,7 @@ env/
 # Model files (besar, tidak perlu di repo)
 pipeline/source/saved_best_models/*.joblib
 
-# Data besar
+# Data besar (terlalu besar untuk GitHub)
 pipeline/source/Data_Final.csv
+"history data/"
+history\ data/

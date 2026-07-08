@@ -66,6 +66,9 @@ class AnalysisResult:
     rekomendasi_mitigasi: List[str] = field(default_factory=list)
     tingkat_urgensi: str = "rendah"        # rendah / sedang / tinggi / kritis
     kelompok_rentan: List[str] = field(default_factory=list)
+    ringkasan_polutan: str = ""            # ringkasan kondisi & tren polutan terukur 24 jam
+    ringkasan_prediksi: str = ""           # ringkasan hasil prediksi polutan 24 jam ke depan
+    ringkasan_index: str = ""              # ringkasan menyeluruh semua data (untuk dashboard utama)
     raw_response: str = ""
     provider_used: str = ""
     error: Optional[str] = None
@@ -81,30 +84,36 @@ def _build_system_prompt() -> str:
 
         Selalu berikan respons dalam format JSON yang valid dengan struktur berikut:
         {
-            "ringkasan_berita": "<Paragraf ringkas (2-3 kalimat) menggambarkan situasi terkini berdasarkan berita>",
+            "ringkasan_berita": "<Paragraf ringkas (2-3 kalimat) yang HANYA meringkas isi BERITA terkait kualitas udara. JANGAN sebut angka prediksi/konsentrasi PM2.5 atau polutan lain di sini.>",
             "faktor_penyebab": [
-                "<Faktor 1 yang berkontribusi pada kualitas udara>",
+                "<Faktor 1 yang berkontribusi pada kualitas udara — dari berita + data polutan terukur saat ini>",
                 "<Faktor 2>",
                 ...
             ],
             "rekomendasi_mitigasi": [
-                "<Rekomendasi konkret 1 untuk pemerintah/masyarakat>",
+                "<Rekomendasi konkret 1 — dari berita + cuaca + polutan terukur saat ini>",
                 "<Rekomendasi 2>",
                 ...
             ],
             "tingkat_urgensi": "<rendah|sedang|tinggi|kritis>",
             "kelompok_rentan": [
                 "<Kelompok yang paling terdampak, misal: anak-anak, lansia, penderita asma>"
-            ]
+            ],
+            "ringkasan_polutan": "<2-3 kalimat meringkas kondisi & tren POLUTAN TERUKUR 24 jam terakhir: polutan dominan, mana yang cenderung naik/turun, dan yang perlu diperhatikan. Boleh sebut angka.>",
+            "ringkasan_prediksi": "<2-3 kalimat meringkas HASIL PREDIKSI 24 jam ke depan berdasar DATA PREDIKSI yang diberikan: polutan/AQI yang diprediksi naik atau turun, perkiraan jam puncak, dan kategori AQI prediksi. Jangan mengarang di luar data prediksi.>",
+            "ringkasan_index": "<2-3 kalimat ringkasan MENYELURUH untuk dashboard utama: gabungkan AQI saat ini + kategori, polutan dominan, kondisi cuaca, arah prediksi, dan berita relevan (bila ada) menjadi satu gambaran singkat.>"
         }
 
-        Panduan penentuan tingkat_urgensi berdasarkan PM2.5:
+        Panduan penentuan tingkat_urgensi berdasarkan AQI/PM2.5:
         - rendah  : PM2.5 < 12 µg/m³ (Baik)
         - sedang  : PM2.5 12–35 µg/m³ (Sedang)
         - tinggi  : PM2.5 35–55 µg/m³ (Tidak Sehat untuk Kelompok Sensitif)
         - kritis  : PM2.5 > 55 µg/m³ (Tidak Sehat / Berbahaya)
 
         ATURAN RELEVANSI (penting):
+        - Field "ringkasan_berita" WAJIB murni dari isi berita. Bila TIDAK ADA berita
+          relevan, tulis singkat bahwa tidak ada berita kualitas udara yang menonjol
+          hari ini — TANPA menyebut angka PM2.5/polutan apa pun.
         - GUNAKAN HANYA berita yang benar-benar berkaitan dengan kualitas udara:
           polusi/pencemaran udara, asap, kabut asap, emisi/kemacetan kendaraan,
           kebakaran lahan/hutan, pembakaran sampah/lahan, debu, atau cuaca yang
@@ -112,13 +121,50 @@ def _build_system_prompt() -> str:
         - ABAIKAN total berita yang tidak relevan (politik, anggaran, santunan,
           pariwisata, pembangunan jalan, olahraga, dll). JANGAN sebut/kutip berita
           tak relevan di ringkasan maupun faktor.
-        - Jika TIDAK ADA berita relevan, nyatakan di ringkasan_berita bahwa tidak ada
-          berita kualitas udara yang menonjol hari ini, lalu dasarkan faktor_penyebab
-          pada DATA POLUTAN TERUKUR dan cuaca (bukan mengarang berita).
+        - Angka polutan/PM2.5/prediksi hanya boleh muncul di ringkasan_polutan,
+          ringkasan_prediksi, ringkasan_index, faktor_penyebab, dan rekomendasi —
+          TIDAK di ringkasan_berita.
         - Jangan pernah mengarang berita yang tidak ada di input.
 
         Berikan respons HANYA dalam format JSON yang valid. Jangan tambahkan teks di luar JSON.
     """).strip()
+
+
+def _fmt_pred_series(prediksi: Optional[dict]) -> str:
+    """
+    Format ringkas deret prediksi 24 jam (AQI + polutan) untuk konteks LLM.
+
+    `prediksi` diharapkan berbentuk:
+      {"labels": [...], "aqi": [...], "pm25": [...], "pm10": [...],
+       "pollutants": {"co": {"forecast": [...]}, ...}}  (pollutants opsional)
+    Menyajikan nilai awal, puncak (beserta jamnya), dan akhir agar hemat token.
+    """
+    if not prediksi:
+        return "Tidak tersedia"
+    labels = prediksi.get("labels") or []
+
+    def _peak_line(name, vals):
+        vals = [v for v in (vals or []) if v is not None]
+        if not vals:
+            return None
+        hi = max(vals)
+        idx = vals.index(hi)
+        jam = labels[idx] if idx < len(labels) else "-"
+        return f"{name}: awal {vals[0]}, puncak {hi} (~{jam}), akhir {vals[-1]}"
+
+    lines = []
+    for nm, key in (("AQI", "aqi"), ("PM2.5", "pm25"), ("PM10", "pm10")):
+        ln = _peak_line(nm, prediksi.get(key))
+        if ln:
+            lines.append(ln)
+    pol = prediksi.get("pollutants") or {}
+    labels_pol = {"co": "CO", "no2": "NO₂", "o3": "O₃", "so2": "SO₂", "nh3": "NH₃"}
+    for k, lab in labels_pol.items():
+        fc = (pol.get(k) or {}).get("forecast")
+        ln = _peak_line(lab, fc)
+        if ln:
+            lines.append(ln)
+    return "\n        ".join(lines) if lines else "Tidak tersedia"
 
 
 def _build_user_prompt(
@@ -129,6 +175,7 @@ def _build_user_prompt(
     risk_level: Optional[str],
     waktu_prediksi: str = "",
     polutan: Optional[dict] = None,
+    prediksi: Optional[dict] = None,
 ) -> str:
     # Format berita
     berita_text = ""
@@ -184,6 +231,9 @@ def _build_user_prompt(
         --- DATA PREDIKSI PM2.5 ---
         Prediksi PM2.5: {pm25_text}
         Risk Level     : {risk_text}
+
+        --- DATA PREDIKSI 24 JAM KE DEPAN (untuk ringkasan_prediksi) ---
+        {_fmt_pred_series(prediksi)}
 
         --- DATA POLUTAN TERUKUR SAAT INI ---
         {polutan_text}
@@ -444,9 +494,11 @@ class AirQualityLLM:
         risk_level: Optional[str] = None,
         waktu_prediksi: str = "",
         polutan: Optional[dict] = None,
+        prediksi: Optional[dict] = None,
     ) -> AnalysisResult:
         """
-        Analisis utama — menggabungkan berita, polutan terukur, cuaca, dan prediksi PM2.5.
+        Analisis utama — menggabungkan berita, polutan terukur, cuaca, prediksi PM2.5,
+        dan deret prediksi 24 jam (untuk ringkasan polutan/prediksi/index).
 
         Returns
         -------
@@ -461,6 +513,7 @@ class AirQualityLLM:
             risk_level=risk_level,
             waktu_prediksi=waktu_prediksi,
             polutan=polutan,
+            prediksi=prediksi,
         )
 
         raw = ""
@@ -528,6 +581,9 @@ class AirQualityLLM:
             rekomendasi_mitigasi=data.get("rekomendasi_mitigasi", []),
             tingkat_urgensi=data.get("tingkat_urgensi", "sedang"),
             kelompok_rentan=data.get("kelompok_rentan", []),
+            ringkasan_polutan=data.get("ringkasan_polutan", ""),
+            ringkasan_prediksi=data.get("ringkasan_prediksi", ""),
+            ringkasan_index=data.get("ringkasan_index", ""),
         )
 
     def test_connection(self) -> tuple[bool, str]:

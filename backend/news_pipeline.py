@@ -150,8 +150,9 @@ def refresh_news(progress_cb=None):
         raise RuntimeError("GROQ_API_KEY belum di-set (env)")
 
     # Muat data terkini dari file JSON yang sudah ada
-    current = _load("current.json")       # data polutan dan cuaca per kabupaten
-    prediction = _load("prediction.json") # prediksi PM2.5/AQI 24 jam ke depan
+    current = _load("current.json")             # data polutan dan cuaca per kabupaten
+    prediction = _load("prediction.json")       # prediksi PM2.5/AQI 24 jam ke depan
+    pollutant_series = _load("pollutant_series.json")  # tren + prediksi per polutan
 
     # Buat lookup cepat: nama kabupaten -> data lokasi
     loc_by_name = {l["name"]: l for l in current.get("locations", [])}
@@ -171,8 +172,9 @@ def refresh_news(progress_cb=None):
     # Ubah ke DataFrame untuk kemudahan filter per lokasi
     df = _articles_df(articles)
 
-    # Inisialisasi LLM dengan max_tokens lebih rendah (900) agar lebih hemat kuota
-    llm = AirQualityLLM(provider=PROVIDER, api_keys=API_KEYS, model=MODEL, max_tokens=900)
+    # max_tokens dinaikkan ke 1400 karena respons JSON kini memuat 3 ringkasan tambahan
+    # (ringkasan_polutan, ringkasan_prediksi, ringkasan_index) selain analisis berita.
+    llm = AirQualityLLM(provider=PROVIDER, api_keys=API_KEYS, model=MODEL, max_tokens=1400)
 
     # ── LANGKAH 2: Analisis per kabupaten ──────────────────────────────────────
     out = {}  # tempat menyimpan hasil analisis per kabupaten
@@ -209,6 +211,10 @@ def refresh_news(progress_cb=None):
         polutan["pm2_5"] = loc.get("pm25")         # current.json pakai key "pm25" bukan "pm2_5"
         polutan["dominant"] = loc.get("dominant")  # polutan dominan saat ini
 
+        # Gabungkan deret prediksi (AQI/PM2.5/PM10 + per-polutan) untuk ringkasan prediksi
+        prediksi = dict(pred)                                        # labels, aqi, pm25, pm10
+        prediksi["pollutants"] = pollutant_series.get(name, {}).get("pollutants", {})
+
         # Kirim ke LLM untuk dianalisis
         res = llm.analyze(
             items,                  # daftar berita relevan
@@ -217,15 +223,19 @@ def refresh_news(progress_cb=None):
             pm25_pred=pm25_pred,    # prediksi PM2.5 tertinggi
             risk_level=risk,        # kategori risiko AQI
             polutan=polutan,        # konsentrasi polutan saat ini
+            prediksi=prediksi,      # deret prediksi 24 jam (AQI + per polutan)
         )
 
         # Simpan hasil analisis kabupaten ini
         out[name] = {
-            "ringkasan":    res.ringkasan_berita,        # paragraf ringkasan situasi
+            "ringkasan":    res.ringkasan_berita,        # paragraf ringkasan situasi (BERITA saja)
             "faktor":       res.faktor_penyebab,         # list faktor penyebab polusi
             "rekomendasi":  res.rekomendasi_mitigasi,    # list rekomendasi tindakan
             "urgensi":      res.tingkat_urgensi,         # level urgensi: rendah/sedang/tinggi/kritis
             "kelompok":     res.kelompok_rentan,         # kelompok rentan yang perlu diperhatikan
+            "ringkasanPolutan":  res.ringkasan_polutan,  # ringkasan kondisi & tren polutan terukur
+            "ringkasanPrediksi": res.ringkasan_prediksi, # ringkasan hasil prediksi polutan 24 jam
+            "ringkasanIndex":    res.ringkasan_index,    # ringkasan menyeluruh (dashboard utama)
             "beritaCount":  len(items),                  # jumlah berita yang dianalisis
             "sumber": [                                  # daftar sumber berita yang dipakai
                 {
